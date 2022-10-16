@@ -1,0 +1,338 @@
+---
+title: "phase2"
+author: "Walker Cayton"
+date: "10/14/2022"
+output: word_document
+---
+
+```{r libraryDump}
+library(tidyverse)
+library(tidymodels)
+library(GGally)
+library(rpart) #for classification trees
+library(rpart.plot) #for plotting trees
+library(RColorBrewer) #better visualization of classification trees
+library(rattle) #better visualization of classification trees
+library(ranger) #for random forests
+library(randomForest) #also for random forests
+library(caret)
+library(skimr)
+library(GGally)
+library(gridExtra)
+library(vip) #variable importance
+library(ROCR)
+library(lubridate)
+
+```
+
+```{r Read CSV}
+students_unclean = read_csv("ames_student.csv")
+students_factors = students_unclean %>% mutate_if(is.character, as_factor)
+##Also removing latitude and longitude as I don't see them being useful unless I categorized them down to pair
+student = students_factors %>% select(
+-	Street	,
+-	Alley	,
+-	Lot_Shape	,
+-	Land_Contour	,
+-	Utilities	,
+-	Condition_2	,
+-	Roof_Matl	,
+-	Bsmt_Exposure	,
+-	BsmtFin_Type_1	,
+-	BsmtFin_SF_1	,
+-	Heating	,
+-	Electrical	,
+-	Functional	,
+-	Fireplace_Qu	,
+-	Garage_Finish	,
+-	Garage_Qual	,
+-	Garage_Cond	,
+-	Paved_Drive	,
+-	Pool_QC	,
+-	Misc_Feature	,
+-	Sale_Type	,
+-	Sale_Condition	,
+-	Lot_Frontage	,
+-	Mas_Vnr_Area	,
+-	BsmtFin_SF_1	,
+-	BsmtFin_SF_2	,
+-	Bsmt_Unf_SF	,
+-	Bsmt_Full_Bath	,
+-	Bsmt_Half_Bath	,
+-	Kitchen_AbvGr	,
+-	Fireplaces	,
+-	Garage_Cars	,
+-	Pool_Area	,
+-	Misc_Val,
+- Longitude,
+- Latitude)
+student = student %>% filter(Neighborhood != "Green_Hills")
+```
+```{r splits}
+set.seed(123) 
+students_split = initial_split(student, prob = 0.70, strata = Above_Median)
+train = training(students_split)
+test = testing(students_split)
+```
+
+```{r whoKnows}
+ggcorr(test)
+```
+
+```{r}
+student_model = 
+  logistic_reg(mode = "classification") %>% #note the use of logistic_reg and mode = "classification"
+  set_engine("glm") #standard logistic regression engine is glm
+
+student_recipe = recipe(Above_Median ~ ., train) %>%
+  step_dummy(all_nominal(), -all_outcomes())
+
+logreg_wf = workflow() %>%
+  add_recipe(student_recipe) %>% 
+  add_model(student_model)
+
+student_fit = fit(logreg_wf, train)
+```
+
+```{r}
+summary(student_fit$fit$fit$fit)
+```
+
+```{r clean model 1 }
+cleanerStudentModel = 
+    logistic_reg(mode = "classification") %>% #note the use of logistic_reg and mode = "classification"
+    set_engine("glm") #standard logistic regression engine is glm
+cleanerStudentRecipe = recipe(Above_Median ~ First_Flr_SF + Second_Flr_SF + Neighborhood  + Full_Bath + Half_Bath + Overall_Qual, train)
+
+
+logreg_wf2 = workflow() %>%
+  add_recipe(cleanerStudentRecipe) %>% 
+  add_model(cleanerStudentModel)
+
+cleanerStudentFit = fit(logreg_wf2, train)
+```
+
+```{r}
+summary(cleanerStudentFit$fit$fit$fit)
+```
+
+Develop predictions  
+```{r}
+predictions = predict(cleanerStudentFit, train, type="prob") #develop predicted probabilities
+head(predictions)
+```
+Let's extract just the "Yes" prediction.  
+```{r}
+predictions = predict(cleanerStudentFit, train, type="prob")[1]
+head(predictions)
+```
+
+
+Threshold selection  
+```{r}
+#Change this next line to the names of your predictions and the response variable in the training data frame
+ROCRpred = prediction(predictions, train$Above_Median) 
+
+###You shouldn't need to ever change the next two lines:
+ROCRperf = performance(ROCRpred, "tpr", "fpr")
+plot(ROCRperf, colorize=TRUE, print.cutoffs.at=seq(0,1,by=0.1), text.adj=c(-0.2,1.7))
+```
+
+```{r}
+as.numeric(performance(ROCRpred, "auc")@y.values)
+```
+```{r}
+#test
+##test = filter(student, Neighborhood == "Green_Hills")
+```
+```{r}
+##this is blowing up because one of the levels isn't in both train and test, likely due to their not being a value with it. I am going to remove it somehwere above, but this is where I noticed the issue. If anything else errors I will also remove that category.
+##cleanerStudentFit %>% predict(test) %>% bind_cols(test) %>% metrics(truth = Above_Median, )
+
+```
+Predictions on train
+```{r}
+#try 2?
+trainpredrf = predict(cleanerStudentFit, train)
+head(trainpredrf)
+confusionMatrix(trainpredrf$.pred_class, train$Above_Median, 
+                positive = "Yes")
+```
+Predictions on test
+```{r}
+#try 2?
+testpredrf = predict(cleanerStudentFit, test)
+head(testpredrf)
+confusionMatrix(testpredrf$.pred_class, test$Above_Median, 
+                positive = "Yes")
+```
+
+##Model 2
+
+```{r try 2}
+studentClassTree_recipe = recipe(Above_Median ~ First_Flr_SF + Second_Flr_SF + Neighborhood  + Full_Bath + Half_Bath + Overall_Qual, train)
+
+studentTree_model = decision_tree() %>% 
+  set_engine("rpart", model = TRUE) %>% #don't forget the model = TRUE flag
+  set_mode("classification")
+
+studenntClassTree_wflow = 
+  workflow() %>% 
+  add_model(studentTree_model) %>% 
+  add_recipe(studentClassTree_recipe)
+
+studentClassTree_fit = fit(studenntClassTree_wflow, train)
+
+#extract the tree's fit from the fit object
+tree = studentClassTree_fit %>% 
+  extract_fit_parsnip() %>% 
+  pluck("fit")
+```
+
+```{r view classification tree}
+
+fancyRpartPlot(tree) 
+
+```
+
+Predictions on train
+```{r}
+#try 2?
+trainpredrf2 = predict(studentClassTree_fit, train)
+head(trainpredrf2)
+confusionMatrix(trainpredrf2$.pred_class, train$Above_Median, 
+                positive = "Yes")
+```
+
+Predictions on test
+```{r}
+#try 2?
+testpredrf2 = predict(studentClassTree_fit, test)
+head(testpredrf2)
+confusionMatrix(testpredrf2$.pred_class, test$Above_Median, 
+                positive = "Yes")
+```
+
+```{r}
+set.seed(123)
+rf_folds = vfold_cv(train, v = 5)
+```
+
+```{r try 3}
+studentsRandomForrest_recipe = recipe(Above_Median ~. , train) %>%
+  step_dummy(all_nominal(), -all_outcomes())
+
+rf_model = rand_forest(mtry = tune(), min_n = tune(), trees = 300) %>% #add tuning of mtry and min_n parameters
+  #setting trees to 100 here should also speed things up a bit, but more trees might be better
+  set_engine("ranger", importance = "permutation") %>% #added importance metric
+  set_mode("classification")
+
+studentsRandomForrest_wflow = 
+  workflow() %>% 
+  add_model(rf_model) %>% 
+  add_recipe(studentsRandomForrest_recipe)
+
+set.seed(123)
+rf_res = tune_grid(
+  studentsRandomForrest_wflow,
+  resamples = rf_folds,
+  grid = 20 #try 20 different combinations of the random forest tuning parameters
+)
+```
+
+```{r}
+rf_res %>%
+  collect_metrics() %>%
+  filter(.metric == "accuracy") %>%
+  select(mean, min_n, mtry) %>%
+  pivot_longer(min_n:mtry,
+    values_to = "value",
+    names_to = "parameter"
+  ) %>%
+  ggplot(aes(value, mean, color = parameter)) +
+  geom_point(show.legend = FALSE) +
+  facet_wrap(~parameter, scales = "free_x") +
+  labs(x = NULL, y = "Accuracy")
+```
+
+```{r}
+tuned_recipe = recipe(Above_Median ~., train) %>%
+  step_dummy(all_nominal(), -all_outcomes())
+
+rf_model = rand_forest(mtry = tune(), min_n = tune(), trees = 300) %>% #add tuning of mtry and min_n parameters
+  #setting trees to 100 here should also speed things up a bit, but more trees might be better
+  set_engine("ranger", importance = "permutation") %>% #added importance metric
+  set_mode("classification")
+
+tuned_wflow = 
+  workflow() %>% 
+  add_model(rf_model) %>% 
+  add_recipe(tuned_recipe)
+
+rf_grid = grid_regular(
+  mtry(range = c(25, 100)), #these values determined through significant trial and error
+  min_n(range = c(5, 20)), #these values determined through significant trial and error
+  levels = 5
+)
+
+set.seed(123)
+rf_res_tuned = tune_grid(
+  tuned_wflow,
+  resamples = rf_folds,
+  grid = rf_grid #use the tuning grid
+)
+```
+
+```{r}
+rf_res_tuned %>%
+  collect_metrics() %>%
+  filter(.metric == "accuracy") %>%
+  select(mean, min_n, mtry) %>%
+  pivot_longer(min_n:mtry,
+    values_to = "value",
+    names_to = "parameter"
+  ) %>%
+  ggplot(aes(value, mean, color = parameter)) +
+  geom_point(show.legend = FALSE) +
+  facet_wrap(~parameter, scales = "free_x") +
+  labs(x = NULL, y = "Accuracy")
+```
+
+```{r}
+best_rf = select_best(rf_res_tuned, "accuracy")
+
+final_rf = finalize_workflow(
+  tuned_wflow,
+  best_rf
+)
+
+final_rf
+```
+```{r}
+#fit the finalized workflow to our training data
+final_rf_fit = fit(final_rf, train)
+```
+
+```{r}
+final_rf_fit %>% pull_workflow_fit() %>% vip(geom = "point")
+```
+
+Predictions  
+```{r}
+trainpredrf = predict(final_rf_fit, train)
+head(trainpredrf)
+```
+
+Confusion matrix
+```{r}
+confusionMatrix(trainpredrf$.pred_class, train$Above_Median, 
+                positive = "Yes")
+```
+
+Predictions on test
+```{r}
+testpredrf = predict(final_rf_fit, test)
+head(testpredrf)
+confusionMatrix(testpredrf$.pred_class, test$Above_Median, 
+                positive = "Yes")
+```

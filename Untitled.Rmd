@@ -1,0 +1,472 @@
+---
+title: "Phase1"
+author: "Walker Cayton"
+date: "10/3/2022"
+output: word_document
+---
+
+
+```{r Add libraries}
+library(tidyverse)
+library(tidymodels)
+library(GGally)
+library(lmtest)
+library(e1071)
+```
+
+```{r Read CSV}
+students = read_csv("ames_student.csv")
+summary(students)
+```
+
+```{r Clean CSV data}
+students_clean = students %>% drop_na()
+```
+
+```{r}
+students_trim1 = select(students, Above_Median, c(1:10))
+students_trim2 = select(students, Above_Median, c(11:20))
+
+```
+
+
+```{r}
+test = count(students, Above_Median, Lot_Config)
+test2 = count(students, Above_Median, MS_SubClass)
+ggplot(test, aes(x = Lot_Config, y = n, color = Above_Median)) + geom_point()
+ggplot(test2, aes(x = MS_SubClass, y = n, color = Above_Median)) + geom_point()
+```
+```{r check for pairs}
+ggcorr(students)
+##ggpairs(students, cardinality_threshold = 28)
+```
+
+```{r Create data frame with factors}
+students_factors = students %>% mutate_if(is.character, as_factor)
+```
+
+```{r}
+students_recipe = recipe(Lot_Area ~ Lot_Frontage, students_factors) %>%
+  step_dummy(all_nominal())
+
+lm_model = #give the model type a name 
+  linear_reg() %>% #specify that we are doing linear regression
+  set_engine("lm") #specify the specify type of linear tool we want to use 
+
+lm_wflow = 
+  workflow() %>% 
+  add_model(lm_model) %>% 
+  add_recipe(students_recipe)
+
+lm_fit = fit(lm_wflow, students_factors)
+```
+```{r}
+##allmod = lm(Above_Median ~., students_clean) #use the ~. to include all predictors rather than typing them all in
+##summary(allmod)
+```
+
+```{r}
+summary(lm_fit$fit$fit$fit)
+```
+
+```{r}
+t1 = table(students$Above_Median,students$MS_SubClass)
+prop.table(t1, margin = 2)
+```
+
+
+```{r}
+ggplot(students, aes(x = Above_Median, y = Land_Contour)) + geom_boxplot()
+```
+
+
+##Focusing on factor fields for now
+
+```{r trying titanic examples}
+ggplot(students_factors, aes(x=MS_SubClass, fill = Above_Median)) + geom_bar() + theme_bw()
+## I think I should remove this one
+##update, I think I should keep this
+
+```
+
+```{r}
+
+ggplot(students_factors, aes(x=MS_Zoning, fill = Above_Median)) + geom_bar() + theme_bw()
+##remove
+##update, keep this as well
+```
+
+```{r}
+ggplot(students_factors, aes(x=Street, fill = Above_Median)) + geom_bar() + theme_bw()
+##gravel count so low that it is useless
+```
+
+```{r}
+ggplot(students_factors, aes(x=Alley, fill = Above_Median)) + geom_bar() + theme_bw()
+##remove
+```
+
+```{r}
+ggplot(students_factors, aes(x=Lot_Shape, fill = Above_Median)) + geom_bar() + theme_bw()
+##seems like it could make a difference but I am going to remove it for the sake of cleaning up what I believe to be useless data
+```
+
+```{r}
+ggplot(students_factors, aes(x=Land_Contour, fill = Above_Median)) + geom_bar() + theme_bw()
+##remove
+```
+
+```{r}
+ggplot(students_factors, aes(x=Utilities, fill = Above_Median)) + geom_bar() + theme_bw()
+##not enough data to be useful
+```
+
+```{r}
+ggplot(students_factors, aes(x=Lot_Config, fill = Above_Median)) + geom_bar() + theme_bw()
+#I may leave this, culdesac seems to have some value but it's pending
+```
+
+```{r}
+ggplot(students_factors, aes(x=Neighborhood, fill = Above_Median)) + geom_bar() + theme_bw()
+##KEEP THIS ONE
+```
+
+```{R}
+ggplot(students_factors, aes(x=Condition_1, fill = Above_Median)) + geom_bar() + theme_bw()
+##not sure
+```
+
+```{r}
+ggplot(students_factors, aes(x=Condition_2, fill = Above_Median)) + geom_bar() + theme_bw()
+##not sure, field name sounds relevant but the data isn't useful
+```
+
+```{r}
+ggplot(students_factors, aes(x=Bldg_Type, fill = Above_Median)) + geom_bar() + theme_bw()
+##keep
+##This seems useful, while single family is an even split (along with townhouse), the other forms are strong No
+```
+
+```{r}
+ggplot(students_factors, aes(x=House_Style, fill = Above_Median)) + geom_bar() + theme_bw()
+##keep, house style seems like an important metric
+```
+
+```{r}
+ggplot(students_factors, aes(x=Overall_Qual, fill = Above_Median)) + geom_bar() + theme_bw()
+##keep
+```
+
+```{r}
+ggplot(students_factors, aes(x=Overall_Cond, fill = Above_Median)) + geom_bar() + theme_bw()
+##keep, may remove
+```
+
+```{r}
+ggplot(students_factors, aes(x=Roof_Style, fill = Above_Median)) + geom_bar() + theme_bw()
+##Keep, for now doesn't seem super relevant
+```
+
+```{r}
+ggplot(students_factors, aes(x=Roof_Matl, fill = Above_Median)) + geom_bar() + theme_bw()
+##remove, not enough data
+```
+
+```{r}
+ggplot(students_factors, aes(x=Exterior_1st, fill = Above_Median)) + geom_bar() + theme_bw()
+#keep
+```
+
+```{r}
+ggplot(students_factors, aes(x=Exterior_2nd, fill = Above_Median)) + geom_bar() + theme_bw()
+#keep
+##vinyl siding for these two seems to be the key indicator of above
+```
+
+```{r}
+ggplot(students_factors, aes(x=Mas_Vnr_Type, fill = Above_Median)) + geom_bar() + theme_bw()
+##don't know what this one means, seems like it may be useful
+```
+
+```{r}
+ggplot(students_factors, aes(x=Mas_Vnr_Area, fill = Above_Median)) + geom_bar() + theme_bw()
+##this is numeric, check back later
+```
+
+```{r}
+ggplot(students_factors, aes(x=Exter_Qual, fill = Above_Median)) + geom_bar() + theme_bw()
+##keeeep
+```
+
+```{r}
+ggplot(students_factors, aes(x=Exter_Cond, fill = Above_Median)) + geom_bar() + theme_bw()
+##keep for now
+```
+
+```{r}
+ggplot(students_factors, aes(x=Foundation, fill = Above_Median)) + geom_bar() + theme_bw()
+##keep
+```
+
+```{r}
+ggplot(students_factors, aes(x=Bsmt_Qual, fill = Above_Median)) + geom_bar() + theme_bw()
+#keep
+```
+
+```{r}
+ggplot(students_factors, aes(x=Bsmt_Cond, fill = Above_Median)) + geom_bar() + theme_bw()
+##maybe keep
+```
+
+```{r}
+ggplot(students_factors, aes(x=Bsmt_Exposure, fill = Above_Median)) + geom_bar() + theme_bw()
+##remove
+```
+
+```{r}
+ggplot(students_factors, aes(x=BsmtFin_Type_1, fill = Above_Median)) + geom_bar() + theme_bw()
+##remove
+```
+
+```{r}
+ggplot(students_factors, aes(x=BsmtFin_SF_1, fill = Above_Median)) + geom_bar() + theme_bw()
+#numeric, revisit but i think I will remove
+```
+
+```{r}
+ ggplot(students_factors, aes(x=Heating, fill = Above_Median)) + geom_bar() + theme_bw()
+#remove
+```
+
+```{r}
+ggplot(students_factors, aes(x=Heating_QC, fill = Above_Median)) + geom_bar() + theme_bw()
+#keep
+```
+
+```{r}
+ggplot(students_factors, aes(x=Central_Air, fill = Above_Median)) + geom_bar() + theme_bw()
+##keep
+```
+
+```{r}
+ggplot(students_factors, aes(x=Electrical, fill = Above_Median)) + geom_bar() + theme_bw()
+#remove
+```
+
+```{r}
+ggplot(students_factors, aes(x=Kitchen_Qual, fill = Above_Median)) + geom_bar() + theme_bw()
+##keep
+```
+
+```{r}
+ggplot(students_factors, aes(x=Functional, fill = Above_Median)) + geom_bar() + theme_bw()
+##remove
+```
+
+```{r}
+ggplot(students_factors, aes(x=Fireplace_Qu, fill = Above_Median)) + geom_bar() + theme_bw()
+#remove
+```
+
+```{r}
+ggplot(students_factors, aes(x=Garage_Type, fill = Above_Median)) + geom_bar() + theme_bw()
+#keep
+```
+
+```{r}
+ggplot(students_factors, aes(x=Garage_Finish, fill = Above_Median)) + geom_bar() + theme_bw()
+#remove, don't see this being relevant
+#also remove garage quality and condition
+```
+
+```{r}
+ggplot(students_factors, aes(x=Paved_Drive, fill = Above_Median)) + geom_bar() + theme_bw()
+#remove
+```
+
+```{r}
+ggplot(students_factors, aes(x=Pool_QC, fill = Above_Median)) + geom_bar() + theme_bw()
+#remove
+```
+
+```{r}
+ggplot(students_factors, aes(x=Fence, fill = Above_Median)) + geom_bar() + theme_bw()
+##keep
+```
+
+```{r}
+ggplot(students_factors, aes(x=Misc_Feature, fill = Above_Median)) + geom_bar() + theme_bw()
+#remove
+```
+
+```{r}
+ggplot(students_factors, aes(x=Sale_Type, fill = Above_Median)) + geom_bar() + theme_bw()
+##remove because I can't infer what the values actual mean
+```
+
+```{r}
+ggplot(students_factors, aes(x=Sale_Condition, fill = Above_Median)) + geom_bar() + theme_bw()
+###Remove
+```
+
+##Moving on to the number fields
+
+```{r}
+ggplot(students_factors, aes(x=Above_Median, y= Lot_Frontage)) + geom_boxplot() + theme_bw()
+
+##remove
+```
+
+```{r}
+ggplot(students_factors, aes(x=Above_Median, y= Lot_Area)) + geom_boxplot() + theme_bw()
+# outliers make this one seem irrelevant, but I think lot size is important.
+```
+
+```{r}
+ggplot(students_factors, aes(x=Above_Median, y= Year_Built)) + geom_boxplot() + theme_bw()
+#keep
+```
+
+```{r}
+ggplot(students_factors, aes(x=Above_Median, y= Year_Remod_Add)) + geom_boxplot() + theme_bw()
+##keep
+```
+
+```{r}
+ggplot(students_factors, aes(x=Above_Median, y= Mas_Vnr_Area)) + geom_boxplot() + theme_bw()
+##remove
+```
+
+```{r}
+ggplot(students_factors, aes(x=Above_Median, y= BsmtFin_SF_1)) + geom_boxplot() + theme_bw()
+##remove
+##also remove BsmtFin_SF_2
+```
+
+```{r}
+ggplot(students_factors, aes(x=Above_Median, y= Bsmt_Unf_SF)) + geom_boxplot() + theme_bw()
+##remove
+```
+
+```{r}
+ggplot(students_factors, aes(x=Above_Median, y= Total_Bsmt_SF)) + geom_boxplot() + theme_bw()
+##keeping for now
+```
+
+```{r}
+ggplot(students_factors, aes(x=Above_Median, y= First_Flr_SF)) + geom_boxplot() + theme_bw()
+#Keep
+```
+
+```{r}
+ggplot(students_factors, aes(x=Above_Median, y= Second_Flr_SF)) + geom_boxplot() + theme_bw()
+#keep
+```
+
+```{r}
+ggplot(students_factors, aes(x=Above_Median, y= Gr_Liv_Area)) + geom_boxplot() + theme_bw()
+#keep, strong
+```
+
+```{r}
+ggplot(students_factors, aes(x=Above_Median, y= Bsmt_Full_Bath)) + geom_boxplot() + theme_bw()
+#remove
+```
+
+```{r}
+ggplot(students_factors, aes(x=Above_Median, y= Bsmt_Half_Bath)) + geom_boxplot() + theme_bw()
+##remove
+```
+
+```{r}
+ggplot(students_factors, aes(x=Above_Median, y= Full_Bath)) + geom_boxplot() + theme_bw()
+#keep
+#think about adding a factored version
+```
+
+```{r}
+ggplot(students_factors, aes(x=Above_Median, y= Half_Bath)) + geom_boxplot() + theme_bw()
+#keep
+```
+
+```{r}
+ggplot(students_factors, aes(x=Above_Median, y= Bedroom_AbvGr)) + geom_boxplot() + theme_bw()
+##remove
+```
+
+```{r}
+ggplot(students_factors, aes(x=Above_Median, y= Kitchen_AbvGr)) + geom_boxplot() + theme_bw()
+
+##remove
+```
+
+```{r}
+ggplot(students_factors, aes(x=Above_Median, y= TotRms_AbvGrd)) + geom_boxplot() + theme_bw()
+
+##keep
+```
+
+```{r}
+ggplot(students_factors, aes(x=Above_Median, y= Fireplaces)) + geom_boxplot() + theme_bw()
+#remove
+```
+
+```{r}
+ggplot(students_factors, aes(x=Above_Median, y= Garage_Cars)) + geom_boxplot() + theme_bw()
+##remove
+```
+
+```{r}
+ggplot(students_factors, aes(x=Above_Median, y= Garage_Area)) + geom_boxplot() + theme_bw()
+
+##maybe
+```
+
+```{r}
+##remove the porch ones because #doubt
+
+ggplot(students_factors, aes(x=Above_Median, y= Pool_Area)) + geom_boxplot() + theme_bw()
+#remove
+```
+
+```{r}
+student_cleaner = students_factors %>% select(
+-	Street	,
+-	Alley	,
+-	Lot_Shape	,
+-	Land_Contour	,
+-	Utilities	,
+-	Condition_2	,
+-	Roof_Matl	,
+-	Bsmt_Exposure	,
+-	BsmtFin_Type_1	,
+-	BsmtFin_SF_1	,
+-	Heating	,
+-	Electrical	,
+-	Functional	,
+-	Fireplace_Qu	,
+-	Garage_Finish	,
+-	Garage_Qual	,
+-	Garage_Cond	,
+-	Paved_Drive	,
+-	Pool_QC	,
+-	Misc_Feature	,
+-	Sale_Type	,
+-	Sale_Condition	,
+-	Lot_Frontage	,
+-	Mas_Vnr_Area	,
+-	BsmtFin_SF_1	,
+-	BsmtFin_SF_2	,
+-	Bsmt_Unf_SF	,
+-	Bsmt_Full_Bath	,
+-	Bsmt_Half_Bath	,
+-	Kitchen_AbvGr	,
+-	Fireplaces	,
+-	Garage_Cars	,
+-	Pool_Area	,
+-	Misc_Val)
+```
+
+```{r view cleaner data set}
+summary(student_cleaner)
+```
